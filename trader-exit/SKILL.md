@@ -5,7 +5,7 @@ description: >-
   when to get out. Reads the entry from trader-entry (or a price you give),
   puts the stop at the opening-range midpoint by default (or the range low,
   your price, a percent, or a multiple of the ATR), rounds it down to the
-  cent, and sets the target at 2R (or 1R, or your price). Refuses a stop at or
+  paisa, and sets the target at 2R (or 1R, or your price). Refuses a stop at or
   above the entry, a target at or below it, or a stop too tight to survive the
   spread, and says why. Writes trader/plan.json for the Time Machine, the
   Budget Manager and Price Alerts. Long side only. Use when the user says
@@ -30,12 +30,12 @@ and a neat plan does not change that.
 python3 "${CLAUDE_SKILL_DIR}/exit.py" plan                          # trader/entry.json: midpoint stop, 2R target
 python3 "${CLAUDE_SKILL_DIR}/exit.py" plan --stop or-mid --target 1R --write
 python3 "${CLAUDE_SKILL_DIR}/exit.py" plan --stop atr:1.5           # needs the session's bars (Yahoo or --offline)
-python3 "${CLAUDE_SKILL_DIR}/exit.py" plan --symbol TSLA --entry 364.18 --or-high 362.18 --or-low 354.47
+python3 "${CLAUDE_SKILL_DIR}/exit.py" plan --symbol RELIANCE --entry 1227.80 --or-high 1223.40 --or-low 1207.30
 python3 "${CLAUDE_SKILL_DIR}/exit.py" show                          # the current trader/plan.json
 ```
 
-Other flags: `--flat-by 15:55`, `--json`, `--now "2026-10-19 10:15"` (New
-York time), `--entry PRICE` with a waiting entry.json to plan ahead, `--setup
+Symbols are plain NSE symbols (RELIANCE, M&M, BAJAJ-AUTO). Other flags:
+`--flat-by 15:10`, `--json`, `--now "2026-10-19 09:51"` (IST), `--entry PRICE` with a waiting entry.json to plan ahead, `--setup
 level`, `--offline FILE` (a saved Yahoo chart JSON for an ATR stop).
 
 ## What it reads and writes
@@ -43,8 +43,8 @@ level`, `--offline FILE` (a saved Yahoo chart JSON for an ATR stop).
 | file | what |
 | --- | --- |
 | `trader/entry.json` | the trigger from trader-entry: symbol, entry price, time, bar, opening range |
-| `trader/config.json` | `flat_by` (15:55) and `min_reward_risk` (1.0: a note here, trader-risk enforces it) |
-| Yahoo chart API | only for an `atr:K` stop: the session's bars up to the entry bar, free and unofficial |
+| `trader/config.json` | `flat_by` (15:10) and `min_reward_risk` (1.0: a note here, trader-risk enforces it) |
+| Yahoo chart API | only for an `atr:K` stop: the session's `<SYMBOL>.NS` bars up to the entry bar, free and unofficial |
 | `trader/plan.json` | with `--write`: entry, stop and its rule, target and its R, risk a share, reward:risk, flat by. trader-timemachine, trader-budget and trader-alerts read it |
 
 ## Stops and targets
@@ -59,16 +59,18 @@ level`, `--offline FILE` (a saved Yahoo chart JSON for an ATR stop).
 
 A level setup has no opening range to lean on, so it needs a stop you name.
 
-- **Rounding.** The stop rounds AWAY from the entry to the cent (down, for a
+- **Rounding.** The stop rounds AWAY from the entry to the paisa (down, for a
   long). Risk = entry minus stop. Target = entry + R x risk, rounded half up
-  to the cent. `2R` by default; `1R`, `1.5R` or `price:X` also work.
+  to the paisa. `2R` by default; `1R`, `1.5R` or `price:X` also work.
 - **Refused, with the reason.** A stop at or above the entry. A target at or
   below it. A risk under 0.05% of the price: too tight to survive the
   spread, normal wiggle would stop you out. An entry.json that has not
   triggered (unless you give `--entry`). A short: v2 plans longs only.
-- **Flat by.** 15:55 by default (or `flat_by` in the config). Out by then,
-  win or lose, no overnight hold. On a 1:00 p.m. early close it moves up to
-  12:55. An entry at or after the flat-by time is refused.
+- **Flat by.** 15:10 by default (or `flat_by` in the config). Out by then,
+  win or lose, no overnight hold. Brokers square off intraday positions on
+  their own in the last part of the session: check your broker's square-off
+  time and keep `flat_by` before it. An entry at or after the flat-by time, or
+  a flat-by at or after the 3:30 PM close, is refused.
 
 ## Steps
 
@@ -88,22 +90,22 @@ A level setup has no opening range to lean on, so it needs a stop you name.
 
 ## Example: the reel
 
-TSLA, Monday 2026-10-19. The entry is 364.18 at 10:15 AM (the 10:10 bar,
-bar 8) and the opening range is 354.47 to 362.18. `exit.py plan --stop
-or-mid --target 1R --write`:
+RELIANCE, Monday 2026-10-19, real Yahoo data. The entry is 1227.80 at 9:50 AM
+(the 9:45 bar, bar 6) and the opening range is 1207.30 to 1223.40. `exit.py
+plan --stop or-mid --target 1R --write`:
 
 ```
-Exit plan: TSLA long, Mon 2026-10-19, opening-range breakout on 5-minute bars
-  Entry         $364.18 at 10:15 AM (bar 8)
-  Stop          $358.32  opening-range midpoint: ($362.18 + $354.47) / 2 = $358.325, rounded down
-  Target        $370.04  1R (one times the risk)
-  Risk a share  $5.86 (1.61% of the entry)
+Exit plan: RELIANCE long, Mon 2026-10-19, opening-range breakout on 5-minute bars
+  Entry         ₹1,227.80 at 9:50 AM (bar 6)
+  Stop          ₹1,215.35  opening-range midpoint: (₹1,223.40 + ₹1,207.30) / 2 = ₹1215.35
+  Target        ₹1,240.25  1R (one times the risk)
+  Risk a share  ₹12.45 (1.01% of the entry)
   Reward:risk   1.0
-  Flat by       15:55 ET, win or lose: no overnight hold
+  Flat by       15:10 IST, win or lose: no overnight hold
 ```
 
-The default 2R target would be 364.18 + 2 x 5.86 = 375.90. trader-budget then
-sizes it: a $50 max loss per trade buys floor(50 / 5.86) = 8 shares.
+The default 2R target would be 1227.80 + 2 x 12.45 = 1252.70. trader-budget then
+sizes it: a ₹500 max loss per trade fits floor(500 / 12.45) = 40 shares.
 
 ## Rules
 
@@ -117,16 +119,14 @@ sizes it: a $50 max loss per trade buys floor(50 / 5.86) = 8 shares.
 
 ## What it never does
 
-It never places an order, never sizes a position, never widens a stop to
-make a plan pass, and never calls a stop a guarantee.
+It never places an order, never tells you to buy or sell, never sizes a
+position, never widens a stop to make a plan pass, and never calls a stop a
+guarantee. Numbers are for your own decision.
 
 ## Safety
 
-- Education and tooling, not financial advice. A PASS is a rules check, not a recommendation.
-- Paper trading by default (`"paper": true`). Going live is the user's own decision, in their own config.
-- Nothing in this pack places an order except trader-broker, and only when all three hold: trader-risk
-  passed that exact order today, the user typed an explicit yes for that one order in the chat, and the
-  user clicked Allow once on Claude's own card because the order tool is set to "Needs approval"
-  (Customize > Connectors > tool permissions). Never set an order tool to "Always allow".
-- No options, margin, short selling or leverage unless the config allows it and the user confirms.
-- Broker keys live in environment variables or the Claude Desktop config, never in the chat.
+- Education and tooling, not financial advice. A PASS is a rules check, not a recommendation. Day trading loses most people money.
+- You make every buy and sell decision. Nothing in this pack places an order: trader-ticket prints what you would enter, and you place it yourself in Groww.
+- No F&O, margin (MTF) or short selling unless the config allows it and you confirm.
+- Broker tokens live in environment variables or the MCP config, never in the chat.
+- Free data can lag or be wrong. Check anything that matters in Groww before you act on it.
